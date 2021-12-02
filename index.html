@@ -1,0 +1,276 @@
+<!--
+ * @Author: your name
+ * @Date: 2021-11-10 14:44:07
+ * @LastEditTime: 2021-12-02 20:25:33
+ * @LastEditors: Please set LastEditors
+ * @Description: 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @FilePath: /tt-desktop/static/red-rain/index.html
+-->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>红包雨</canvas></title>
+    <meta name="keywords" content="" />
+    <meta name="description" content="" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #app {
+            width: 410px;
+            height: 495px;
+            position: relative;
+            overflow: hidden;
+            top: 0;
+        }
+
+        #red-rain-canvas {
+            position: absolute;
+        }
+
+        .red-rain-draw {
+            position: absolute;
+            pointer-events: none;
+        }
+    </style>
+    <script type="text/javascript" src="./vue.min.js"></script>
+</head>
+
+
+<body>
+    <div>
+        <!-- 播放vap的 -->
+        <div id="app">
+            <img ref="imageOne" style="display:none" src="./assets/logo.png">
+            <img ref="imageTwo" style="display:none" src="./assets/logo.png">
+            <img ref="imageThree" style="display:none" src="./assets/logo.png">
+            <div :style="stylePosition" class='red-rain-draw'></div>
+            <canvas id="red-rain-canvas" :width="innerWidth" :height="innerHeight" @click="listenClick"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        var one = new Vue({
+            el: "#app",
+            data: {
+                //注意：使用冒号没问题，使用等号会报错
+                preloaded: false, //load 参数
+                coinArr: [], //canvas中图片的数量
+                ctx: '', //canvas对象
+                innerWidth: 410, //canvas宽度
+                innerHeight: 500, //canvas高度
+                offsetTop: 0, //canvastop距离
+                offsetLeft: 0, //canvasleft距离
+                numClick: 0, //点中的数量
+                speedList: [], //点中的红包速度列表，有多层红包时候
+                seedTime: true, //点中的红包只取一个
+                runCountdownTimer: '', //停止动画的Interval
+                addCoinsTimer: '', //生成红包的timeout
+                moveCoinAnimation: '', //绘制动画的AnimationFrame
+                animateVap: [],
+                stylePosition: '',
+                vap: null,
+            },
+            beforeDestroy() {
+                window.cancelAnimationFrame(this.moveCoinAnimation)
+                this.addCoinsTimer ? clearTimeout(this.addCoinsTimer) : ""
+                this.numClick = 0
+            },
+            mounted() {
+
+                this.coinArr = [{
+                        x: 100,
+                        y: 10, // 运动的关键是在每一帧都改变y
+                        width: 66,
+                        height: 86,
+                        img: this.$refs.imageOne,
+                    },
+                    {
+                        x: 100,
+                        y: 10, // 运动的关键是在每一帧都改变y
+                        width: 53,
+                        height: 70,
+                        img: this.$refs.imageTwo,
+                    },
+                    {
+                        x: 100,
+                        y: 10, // 运动的关键是在每一帧都改变y
+                        width: 53,
+                        height: 70,
+                        img: this.$refs.imageTwo,
+                    },
+                    {
+                        x: 100,
+                        y: 10, // 运动的关键是在每一帧都改变y
+                        width: 53,
+                        height: 70,
+                        img: this.$refs.imageThree,
+                    }
+                ]
+                this.initialValue = this.coinArr
+                this.initCanvas()
+                this.start()
+            },
+            methods: {
+                setAnimdateShow() {
+                    // 重新绘制咯
+                    this.coinArr = []
+                },
+                setAnimdateNotShow() {
+                    // 隐藏后停止动画
+                    this.coinArr = []
+                },
+                initCanvas() {
+                    const canvas = document.getElementById("red-rain-canvas");
+                    //    获取图片的相对宽高
+                    this.offsetTop = canvas.getBoundingClientRect().top
+                    this.offsetLeft = canvas.getBoundingClientRect().left
+                    if (canvas.getContext) {
+                        this.ctx = canvas.getContext("2d");
+                    }
+                },
+                drawCoins() {
+                    // 遍历这个红包对象数组
+                    this.coinArr.forEach((coin, index) => {
+                        const newCoin = {
+                            x: coin.x,
+                            // 运动的关键  每次只有y不一样
+                            y: coin.y + coin.speed,
+                            width: coin.width,
+                            height: coin.height,
+                            img: coin.img,
+                            speed: coin.speed,
+                            index: index,
+                        };
+                        // 绘制某个红包对象时，也同时生成一个新的红包对象，替换掉原来的它，唯一的区别就是它的y变了，下一帧绘制这个红包时，就运动了一点点距离
+                        this.coinArr.splice(index, 1, newCoin);
+
+                        // 超过限度就删除
+                        if (coin.y < this.innerHeight) {
+                            // this.ctx.globalAlpha = 0.9;//添加透明度
+                            this.ctx.drawImage(
+                                coin.img,
+                                coin.x,
+                                coin.y,
+                                coin.width,
+                                coin.height
+                            );
+                        }
+                    });
+                },
+                compare(property, desc) {
+                    return function(a, b) {
+                        const value1 = a[property];
+                        const value2 = b[property];
+                        if (desc == true) {
+                            // 升序排列
+                            return value1 - value2;
+                        } else {
+                            // 降序排列
+                            return value2 - value1;
+                        }
+                    }
+                },
+                moveCoins() {
+                    // 清空canvas
+                    this.ctx.clearRect(0, 0, this.innerWidth, this.innerHeight);
+                    // 绘制新的一帧动画
+                    this.drawCoins();
+                    this.coinArr.forEach((coin, index) => {
+                        if (coin.y > this.innerHeight) {
+                            this.coinArr.splice(index, 1); //容易掉帧，该如何解决
+                        }
+                    })
+                    // 不断执行绘制，形成动画，requestAnimationFrame:要求浏览器在下次重绘之前调用指定的回调函数更新动画
+                    this.moveCoinAnimation = window.requestAnimationFrame(this.moveCoins);
+                },
+                pushCoins() {
+                    // 每次随机生成1~4个红包
+                    const random = Math.floor((Math.random() * 4) + 1);
+                    let arr = [];
+                    for (let i = 0; i < random; i++) {
+                        let x = Math.random() * (this.innerWidth - this.initialValue[i].width)
+                        if (x < 60) {
+                            x = 60 + x
+                        } else if (x > (this.innerWidth - this.initialValue[i].width) - 60) {
+                            x = (this.innerWidth - this.initialValue[i].width) - 60
+                        }
+                        // 创建新的红包对象
+                        const newCoin = {
+                            x: x, // 横向随机  红包不要贴近边边
+                            y: -80, // 
+                            width: this.initialValue[i].width + Math.random(), // 宽度，3种类型，但是需要加一个用来表示特制定这个coin
+                            height: this.initialValue[i].height, //高度，三种类型
+                            img: this.initialValue[i].img, // 取一个红包图片对象，这几个图片对象在页面初始化时就已经缓存好了
+                            speed: (Math.random() * 3 + 2), // 下落速度 随机
+                        };
+                        arr.push(newCoin);
+                    }
+                    // 每次都插入一批新红包对象arr到运动的红包数组this.coinArr
+                    this.coinArr = [...this.coinArr, ...arr];
+                    // 间隔多久生成一批红包
+                    this.addCoinsTimer = setTimeout(() => {
+                        this.pushCoins();
+                    }, 1000);
+                },
+                start() {
+                    this.pushCoins(); // 不断增加红包
+                    this.moveCoins(); // 红包开始运动
+                    // // 开始10秒倒计时
+                    // this.runCountdownTimer = setInterval(() => {
+                    //     //...倒计时10s后，做一些停止动画的工作
+                    // }, 1000);
+                },
+                // 判断点击位置  是否处于某个coin之中
+                isIntersect(point, coin) {
+                    const distanceX = point.x - (coin.x + this.offsetLeft);
+                    const distanceY = point.y - (coin.y + this.offsetTop);
+                    const withinX = distanceX > 0 && distanceX < coin.width;
+                    const withinY = distanceY > 0 && distanceY < coin.height;
+                    return withinX && withinY;
+                },
+                repackClick(coin) {
+                    // 防抖
+                    this.speedList.push(coin)
+                    if (this.seedTime) {
+                        setTimeout(() => {
+                            this.seedTime = true
+                            this.numClick++
+                            // 看是否需要清除红包
+                            this.speedList = this.speedList.sort(this.compare("speed", false))
+                            // 清除红包,清除最上层，速度最快的那个红包
+                            let findIndex = this.coinArr.findIndex(item => item && item.width === this.speedList[0].width)
+                            this.coinArr.splice(findIndex, 1);
+                            this.stylePosition = `left:${this.speedList[0].x - 70}px;top:${this.speedList[0].y - 40}px;z-index:10`
+
+
+                            this.speedList = []
+                        }, 50)
+                    }
+                    this.seedTime = false
+                },
+                listenClick(e) {
+                    // 点击位置
+                    const pos = {
+                        x: e.clientX,
+                        y: e.clientY
+                    };
+                    this.coinArr.forEach((coin, index) => {
+                        // 判断点击位置是否在该红包范围内
+                        if (this.isIntersect(pos, coin)) {
+                            this.repackClick(coin)
+                        }
+                    })
+                },
+
+            }
+        })
+    </script>
+</body>
+
+</html>
